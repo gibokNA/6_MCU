@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  coturn:
+    image: coturn/coturn:4.6.2
+    container_name: coturn-server
+    restart: always
+    # [핵심] Host Network 모드 사용
+    # Docker NAT를 거치지 않고 호스트의 IP와 포트(3478)를 직접 사용.
+    # 성능 저하를 막고, 복잡한 포트 매핑을 피하는 가장 확실한 방법.
+    network_mode: host
+
+    environment:
+      # [인증] "사용자ID:비밀번호" 형식
+      # 실무에선 DB와 연동하지만, 간단한 구축을 위해 정적(Static) 계정 사용
+      - TURN_USER=kurento:mcu_password 
+      - TURN_REALM=kurento.mcu.ops 
+      
+      # [IP 설정] 매우 중요!
+      # 외부에서 접속할 공인 IP를 지정해야 정확한 후보(Candidate)를 줌.
+      - EXTERNAL_IP=3.34.33.109
+      
+      # [로깅] 로그 레벨 설정 (문제 발생 시 디버깅용)
+      - VERBOSE=true
+
+    # [볼륨] 설정 파일이나 데이터를 영구 저장할 경우 사용 (이번엔 환경변수로 처리하므로 생략 가능)
+    # volumes:
+    #   - ./coturn/turnserver.conf:/etc/coturn/turnserver.conf
+
+  # Kurento Media Server (KMS)
+  kms:
+    image: kurento/kurento-media-server:6.18.0
+    container_name: kms-server
+    restart: always
+    
+    # [핵심] Host Network 모드 사용
+    # 이유 1: 미디어 패킷 처리 성능 최적화 (NAT Bypass)
+    # 이유 2: 복잡한 UDP 포트 범위(49152-65535) 매핑 불필요
+    network_mode: host
+
+    # [볼륨 마운트]
+    # 호스트에서 작성한 설정 파일을 컨테이너 내부의 설정 위치로 덮어씌움.
+    volumes:
+      - ./config/WebRtcEndpoint.conf.ini:/etc/kurento/modules/kurento/WebRtcEndpoint.conf.ini
+      # (선택) 녹화 기능을 쓴다면 녹화 파일 저장소도 마운트
+      # - ./recordings:/var/lib/kurento/recordings
+
+    # [환경 변수]
+    environment:
+      # 로그 레벨 설정 (디버깅용)
+      # 3:Info, 4:Debug, 5:Trace (평소엔 3, 문제 생기면 4~5)
+      - GST_DEBUG=Kurento*:3
