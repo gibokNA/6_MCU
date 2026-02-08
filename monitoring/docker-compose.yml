@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  # 1. 시스템 메트릭 수집기 (HW 정보 수집)
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    restart: unless-stopped
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.ignored-mount-points=^/(sys|proc|dev|host|etc)($$|/)'
+    networks:
+      - monitoring-net
+
+  # 2. 데이터 저장소
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    restart: unless-stopped
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090" # 프로메테우스 웹 UI (디버깅용)
+    networks:
+      - monitoring-net
+
+  # 3. 시각화 대시보드
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    restart: unless-stopped
+    ports:
+      - "3001:3000" # [중요] 호스트의 3001번을 컨테이너의 3000번으로 연결 (Node.js 충돌 방지)
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin # 초기 비번 설정
+    networks:
+      - monitoring-net
+
+networks:
+  monitoring-net:
+    driver: bridge

@@ -6,6 +6,15 @@ resource "aws_security_group" "mcu_sg" {
   description = "Security Group for Kurento Media Server"
   vpc_id      = aws_vpc.main.id 
 
+  # [Inbound] Grafana Dashboard
+  ingress {
+    description = "Grafana Dashboard"
+    from_port   = 3001
+    to_port     = 3001
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
   # [Inbound] (Ping 허용)
   ingress {
     description = "Allow all ICMP"
