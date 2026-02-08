@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Elimnet MCU Demo</title>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/webrtc-adapter/8.2.3/adapter.min.js"></script>
+    <script src="/kurento-utils.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; background: #f0f2f5; }
+        .video-container { display: flex; justify-content: center; gap: 20px; margin-top: 20px; }
+        video { width: 480px; height: 360px; background: black; border-radius: 8px; }
+        button { padding: 10px 20px; font-size: 16px; cursor: pointer; background: #007bff; color: white; border: none; border-radius: 5px; }
+        button:disabled { background: #ccc; }
+    </style>
+</head>
+<body>
+    <h1>MCU Video Conference Demo</h1>
+    <div class="controls">
+        <button id="startBtn" onclick="start()">회의 시작 (Join Room)</button>
+        <button id="stopBtn" onclick="stop()" disabled>나가기 (Leave)</button>
+    </div>
+    <div class="video-container">
+        <div>
+            <h3>Mixed Video (from MCU)</h3>
+            <video id="remoteVideo" autoplay playsinline></video>
+        </div>
+        <div>
+            <h3>Local Camera (Raw)</h3>
+            <video id="localVideo" autoplay playsinline muted></video>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        let webRtcPeer;
+        const remoteVideo = document.getElementById('remoteVideo');
+        const localVideo = document.getElementById('localVideo');
+
+        socket.on('message', (message) => {
+            switch (message.id) {
+                case 'joinResponse':
+                    console.log('SDP Answer Received');
+                    webRtcPeer.processAnswer(message.sdpAnswer, (error) => {
+                        if (error) console.error(error);
+                    });
+                    break;
+                case 'iceCandidate':
+                    webRtcPeer.addIceCandidate(message.candidate, (error) => {
+                        if (error) console.error(error);
+                    });
+                    break;
+            }
+        });
+
+        function start() {
+            document.getElementById('startBtn').disabled = true;
+            document.getElementById('stopBtn').disabled = false;
+
+            const options = {
+                localVideo: localVideo,
+                remoteVideo: remoteVideo,
+                onicecandidate: (candidate) => {
+                    socket.emit('message', {
+                        id: 'onIceCandidate',
+                        candidate: candidate
+                    });
+                },
+                // [추가된 핵심 설정] 브라우저가 사용할 STUN/TURN 서버 지정
+                configuration: {
+                    iceServers: [
+                        {
+                            urls: "stun:3.34.33.109:3478" // 본인 탄력적 IP 확인
+                        },
+                        {
+                            urls: "turn:3.34.33.109:3478",
+                            username: "kurento",
+                            credential: "mcu_password"
+                        }
+                    ]
+                }
+            };
+
+            // KurentoUtils가 카메라 권한 획득 + SDP Offer 생성까지 다 해줌
+            webRtcPeer = new kurentoUtils.WebRtcPeer.WebRtcPeerSendrecv(options, function(error) {
+                if (error) return console.error(error);
+                this.generateOffer((error, sdpOffer) => {
+                    if (error) return console.error(error);
+                    console.log('Sending SDP Offer to Server...');
+                    socket.emit('message', {
+                        id: 'joinRoom',
+                        sdpOffer: sdpOffer
+                    });
+                });
+            });
+        }
+
+        function stop() {
+            if (webRtcPeer) {
+                webRtcPeer.dispose();
+                webRtcPeer = null;
+            }
+            socket.emit('message', { id: 'leaveRoom' });
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('stopBtn').disabled = true;
+        }
+    </script>
+</body>
+</html>

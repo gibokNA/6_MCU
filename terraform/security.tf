@@ -6,6 +6,15 @@ resource "aws_security_group" "mcu_sg" {
   description = "Security Group for Kurento Media Server"
   vpc_id      = aws_vpc.main.id 
 
+  # [Inbound] (Ping 허용)
+  ingress {
+    description = "Allow all ICMP"
+    from_port   = -1
+    to_port     = -1
+    protocol    = "icmp"
+    cidr_blocks = ["0.0.0.0/0"] # 보안상 특정 IP로 제한하는것이 좋음.
+  }
+
   # [Inbound 1] SSH 접속 (관리자용)
   ingress {
     description = "SSH from My IP"
@@ -58,6 +67,15 @@ resource "aws_security_group" "mcu_sg" {
     from_port   = 3478
     to_port     = 3478
     protocol    = "udp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  # [Inbound] Node.js Signaling Server
+  ingress {
+    description = "Node.js Signaling"
+    from_port   = 3000
+    to_port     = 3000
+    protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
 
